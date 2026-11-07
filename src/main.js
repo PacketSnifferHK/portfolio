@@ -199,8 +199,8 @@ const portrait = $(".portrait");
 portrait?.addEventListener("click", () => {
   const on = portrait.getAttribute("aria-pressed") !== "true";
   portrait.setAttribute("aria-pressed", String(on));
-  portrait.setAttribute("aria-label", on ? "Show my thermal photo" : "Show my regular photo instead of the thermal one");
-  portrait.querySelector(".portrait-hint").textContent = on ? "Regular view. Tap for thermal." : "Thermal view. Tap to warm up.";
+  portrait.setAttribute("aria-label", on ? "Show my regular photo" : "Show me through a thermal camera");
+  portrait.querySelector(".portrait-hint").textContent = on ? "Tap for the regular photo" : "Tap for the thermal view";
 });
 
 // ---------- contact form: send without leaving the page ----------

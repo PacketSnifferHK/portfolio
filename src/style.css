@@ -228,12 +228,12 @@ main { position: relative; z-index: 2; }
 .portrait {
   position: relative; display: block; width: 100%; aspect-ratio: 1; padding: 0; cursor: pointer;
   border-radius: 50%; border: 0; background: var(--ink-2); overflow: hidden;
-  box-shadow: 0 0 0 1px var(--line-2), 0 0 60px -10px rgb(196 47 123 / 0.45);
+  box-shadow: 0 0 0 1px var(--line-2), 0 0 60px -14px rgb(196 47 123 / 0.4);
 }
 .portrait img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 0.6s ease; }
-.p-real { opacity: 0; }
-.portrait[aria-pressed="true"] .p-real { opacity: 1; }
-@media (hover: hover) { .portrait:hover .p-real { opacity: 1; } .portrait[aria-pressed="true"]:hover .p-real { opacity: 0; } }
+.p-heat { opacity: 0; }
+.portrait[aria-pressed="true"] .p-heat { opacity: 1; }
+@media (hover: hover) { .portrait:hover .p-heat { opacity: 1; } .portrait[aria-pressed="true"]:hover .p-heat { opacity: 0; } }
 .portrait-hint {
   position: absolute; left: 50%; bottom: 9%; translate: -50% 0; white-space: nowrap;
   font-size: 0.75rem; font-weight: 650; padding: 4px 10px; border-radius: 999px; background: rgb(13 10 28 / 0.72);
