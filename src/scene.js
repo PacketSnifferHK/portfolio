@@ -1,222 +1,440 @@
-// The homelab, drawn as a thermal image.
-// One gaming PC (the Proxmox host) that opens up as you scroll: the GPU heats up,
-// the virtual layers rise out of it, and links go out to the phone, backups and GitHub.
+// The homelab: my old gaming PC, modelled from scratch and lit like a product shot.
+// Scrolling sweeps a thermal-camera scan line down the case (the render turns into a heat
+// image), pulls the parts apart into an exploded view, then raises the virtual layers out
+// of it and draws the links to my phone, backups and GitHub.
 import * as THREE from "three";
+import { RoundedBoxGeometry } from "three/examples/jsm/geometries/RoundedBoxGeometry.js";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
+import { RoomEnvironment } from "three/examples/jsm/environments/RoomEnvironment.js";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 import { OutputPass } from "three/examples/jsm/postprocessing/OutputPass.js";
 
-// ---------- heat ramp (same stops as the CSS --heat-* tokens) ----------
-const RAMP = [
-  [0.0, new THREE.Color("#1d1546")],
-  [0.3, new THREE.Color("#5a2a88")],
-  [0.55, new THREE.Color("#c42f7b")],
-  [0.8, new THREE.Color("#ff7a1a")],
-  [1.0, new THREE.Color("#ffe9a8")],
-];
+// ---------- palette (same stops as the CSS --heat-* tokens) ----------
+const RAMP_HEX = ["#1d1546", "#5a2a88", "#c42f7b", "#ff7a1a", "#ffe9a8"];
+const RAMP_T = [0, 0.3, 0.55, 0.8, 1];
+const RAMP = RAMP_HEX.map((h) => new THREE.Color(h));
 export function heat(t, out = new THREE.Color()) {
   t = Math.min(1, Math.max(0, t));
   for (let i = 1; i < RAMP.length; i++) {
-    if (t <= RAMP[i][0]) {
-      const [t0, c0] = RAMP[i - 1], [t1, c1] = RAMP[i];
-      return out.copy(c0).lerp(c1, (t - t0) / (t1 - t0));
-    }
+    if (t <= RAMP_T[i]) return out.copy(RAMP[i - 1]).lerp(RAMP[i], (t - RAMP_T[i - 1]) / (RAMP_T[i] - RAMP_T[i - 1]));
   }
-  return out.copy(RAMP[RAMP.length - 1][1]);
+  return out.copy(RAMP[RAMP.length - 1]);
 }
 
 const lerp = (a, b, t) => a + (b - a) * t;
-const ease = (t) => t * t * (3 - 2 * t);
 const clamp01 = (t) => Math.min(1, Math.max(0, t));
+const ease = (t) => t * t * (3 - 2 * t);
+const window01 = (p, a, b) => ease(clamp01((p - a) / (b - a)));
 
-// ---------- keyframes: one per chapter of the page ----------
-// cam/target: camera; spin: idle rotation; open: side panel off; gpu: GPU heat;
-// layers: virtual layers risen; net: outside links; caseFade; dim: page content takes over
+// ---------- keyframes along the scroll story ----------
+// 0 hero (real render) · 1 thermal + exploded · 2 layers · 3 links out · 4 gone
 const KEYS = [
-  { cam: [6.4, 2.3, 8.2], target: [0, 0.1, 0], spin: 1, open: 0, gpu: 0.5, layers: 0, net: 0, caseFade: 0, dim: 0 },
-  { cam: [8.4, 1.1, 1.4], target: [-0.4, -0.1, 0.1], spin: 0, open: 1, gpu: 0.97, layers: 0, net: 0, caseFade: 0, dim: 0 },
-  { cam: [8.2, 7.2, 8.8], target: [0, 3.1, 0], spin: 0, open: 1, gpu: 0.85, layers: 1, net: 0, caseFade: 0.55, dim: 0 },
-  { cam: [11.5, 8.6, 13.8], target: [0.6, 4.6, -0.6], spin: 0, open: 1, gpu: 0.8, layers: 1, net: 1, caseFade: 0.55, dim: 0 },
-  { cam: [9.5, 4.5, 12.5], target: [0, 1.6, 0], spin: 1, open: 0.3, gpu: 0.5, layers: 0.6, net: 0, caseFade: 0.2, dim: 1 },
+  { cam: [7.9, 2.5, 11.2], target: [0, 0.15, 0], sway: 1, explode: 0, gpu: 0.42, layers: 0, net: 0, cool: 0 },
+  { cam: [12.4, 2.8, 4.9], target: [1.0, -0.1, -0.25], sway: 0, explode: 1, gpu: 0.98, layers: 0, net: 0, cool: 0 },
+  { cam: [9.2, 7.6, 10.2], target: [0, 3.0, 0], sway: 0, explode: 0, gpu: 0.88, layers: 1, net: 0, cool: 0.45 },
+  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.8, layers: 1, net: 1, cool: 0.45 },
+  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.6, layers: 1, net: 1, cool: 0.6 },
 ];
-
-function mixKeys(s) {
-  const i = Math.min(KEYS.length - 2, Math.max(0, Math.floor(s)));
-  const t = ease(clamp01(s - i));
+function mixKeys(p) {
+  const i = Math.min(KEYS.length - 2, Math.max(0, Math.floor(p)));
+  const t = ease(clamp01(p - i));
   const a = KEYS[i], b = KEYS[i + 1], o = {};
   for (const k in a) o[k] = Array.isArray(a[k]) ? a[k].map((v, j) => lerp(v, b[k][j], t)) : lerp(a[k], b[k], t);
   return o;
 }
 
-// ---------- small builders ----------
-function part(geo, h, { fill = 0.16, edge = 1 } = {}) {
-  // a component: translucent fill + bright edges, both coloured by heat
-  const g = new THREE.Group();
-  const fillMat = new THREE.MeshBasicMaterial({ color: heat(h), transparent: true, opacity: fill, depthWrite: false, side: THREE.DoubleSide });
-  const edgeMat = new THREE.LineBasicMaterial({ color: heat(h), transparent: true, opacity: edge });
-  g.add(new THREE.Mesh(geo, fillMat));
-  g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), edgeMat));
-  g.userData = { fillMat, edgeMat, baseFill: fill, baseEdge: edge, h };
+// ---------- thermal shader: injected into every physical material ----------
+const G = {
+  uScan: { value: 99 },   // world-space height of the scan line; everything above it is shown in thermal
+  uBand: { value: 0 },    // brightness of the scan line itself
+  uRamp: { value: RAMP.map((c) => new THREE.Vector3(c.r, c.g, c.b)) },
+};
+const THERMAL_FRAG = /* glsl */ `
+  uniform float uScan; uniform float uBand; uniform float uHeat; uniform vec3 uRamp[5];
+  varying vec3 vWPos;
+  vec3 heatRamp(float t) {
+    t = clamp(t, 0.0, 1.0);
+    if (t < 0.3) return mix(uRamp[0], uRamp[1], t / 0.3);
+    if (t < 0.55) return mix(uRamp[1], uRamp[2], (t - 0.3) / 0.25);
+    if (t < 0.8) return mix(uRamp[2], uRamp[3], (t - 0.55) / 0.25);
+    return mix(uRamp[3], uRamp[4], (t - 0.8) / 0.2);
+  }`;
+const THERMAL_APPLY = /* glsl */ `
+  {
+    float th = smoothstep(uScan - 0.02, uScan + 0.02, vWPos.y);
+    float facing = abs(dot(normalize(normal), normalize(vViewPosition)));
+    float h = uHeat * (0.7 + 0.3 * facing) + vWPos.y * 0.018 + sin(vWPos.z * 2.3 + vWPos.y * 1.7) * 0.012;
+    vec3 tc = heatRamp(h) * (1.0 + smoothstep(0.78, 1.0, h) * 1.6);
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, tc, th);
+    gl_FragColor.a = mix(gl_FragColor.a, 1.0, th * 0.85);
+    float band = 1.0 - smoothstep(0.0, 0.045, abs(vWPos.y - uScan));
+    gl_FragColor.rgb += band * uBand * vec3(1.0, 0.72, 0.38) * 2.4;
+  }`;
+
+function thermal(material, h) {
+  material.userData.heat = { value: h };
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms.uScan = G.uScan;
+    shader.uniforms.uBand = G.uBand;
+    shader.uniforms.uRamp = G.uRamp;
+    shader.uniforms.uHeat = material.userData.heat;
+    shader.vertexShader = "varying vec3 vWPos;\n" + shader.vertexShader.replace(
+      "#include <project_vertex>",
+      "#include <project_vertex>\n  vWPos = (modelMatrix * vec4(transformed, 1.0)).xyz;"
+    );
+    shader.fragmentShader = THERMAL_FRAG + "\n" + shader.fragmentShader.replace(
+      "#include <opaque_fragment>",
+      "#include <opaque_fragment>\n" + THERMAL_APPLY
+    );
+  };
+  return material;
+}
+function std(color, { metal = 0.5, rough = 0.5, h = 0.3, emissive = null, ei = 0, env = 0.7 } = {}) {
+  const m = new THREE.MeshStandardMaterial({ color, metalness: metal, roughness: rough, envMapIntensity: env });
+  if (emissive) { m.emissive = new THREE.Color(emissive); m.emissiveIntensity = ei; m.userData.ei = ei; }
+  return thermal(m, h);
+}
+
+// ---------- geometry helpers ----------
+const box = (x, y, z) => new THREE.BoxGeometry(x, y, z);
+const rbox = (x, y, z, r = 0.03) => new RoundedBoxGeometry(x, y, z, 3, r);
+function place(geo, x, y, z, rx = 0, ry = 0, rz = 0) {
+  const g = geo.clone();
+  g.applyMatrix4(new THREE.Matrix4().makeRotationFromEuler(new THREE.Euler(rx, ry, rz)));
+  g.translate(x, y, z);
   return g;
 }
-function setHeat(p, h, fade = 1) {
-  heat(h, p.userData.fillMat.color);
-  heat(h, p.userData.edgeMat.color);
-  p.userData.fillMat.opacity = p.userData.baseFill * fade;
-  p.userData.edgeMat.opacity = p.userData.baseEdge * fade;
-}
-function fan(radius, h) {
+const mesh = (geo, mat) => new THREE.Mesh(geo, mat);
+const at = (parent, m, x, y, z) => { m.position.set(x, y, z); parent.add(m); return m; };
+
+// a case fan facing +z: square frame with a round throat, curved blades, hub, optional RGB ring
+function fan(size, mats, { rgb = false } = {}) {
   const g = new THREE.Group();
-  const ring = part(new THREE.CylinderGeometry(radius, radius, 0.08, 40, 1, true), h, { fill: 0.05 });
-  ring.rotation.x = Math.PI / 2;
-  g.add(ring);
+  const s = size / 2, r = s * 0.92;
+  const frame = new THREE.Shape();
+  const c = s * 0.18;
+  frame.moveTo(-s + c, -s); frame.lineTo(s - c, -s); frame.quadraticCurveTo(s, -s, s, -s + c);
+  frame.lineTo(s, s - c); frame.quadraticCurveTo(s, s, s - c, s); frame.lineTo(-s + c, s);
+  frame.quadraticCurveTo(-s, s, -s, s - c); frame.lineTo(-s, -s + c); frame.quadraticCurveTo(-s, -s, -s + c, -s);
+  const hole = new THREE.Path(); hole.absarc(0, 0, r, 0, Math.PI * 2, true); frame.holes.push(hole);
+  const fg = new THREE.ExtrudeGeometry(frame, { depth: size * 0.18, bevelEnabled: false, curveSegments: 28 });
+  fg.translate(0, 0, -size * 0.09);
+  g.add(mesh(fg, mats.plastic));
   const blades = new THREE.Group();
-  for (let i = 0; i < 7; i++) {
-    const b = part(new THREE.BoxGeometry(radius * 0.82, 0.12, 0.012), h, { fill: 0.25 });
-    b.position.x = radius * 0.42;
-    const holder = new THREE.Group();
-    holder.rotation.z = (i / 7) * Math.PI * 2;
-    b.rotation.x = 0.5;
-    holder.add(b);
-    blades.add(holder);
-  }
+  const bl = new THREE.Shape();
+  bl.moveTo(r * 0.22, -r * 0.08);
+  bl.quadraticCurveTo(r * 0.6, -r * 0.22, r * 0.95, -r * 0.05);
+  bl.quadraticCurveTo(r * 0.75, r * 0.2, r * 0.22, r * 0.14);
+  const bg = new THREE.ExtrudeGeometry(bl, { depth: size * 0.01, bevelEnabled: false, curveSegments: 10 });
+  const bladeGeos = [];
+  for (let i = 0; i < 7; i++) bladeGeos.push(place(bg, 0, 0, 0, 0.32, 0, (i / 7) * Math.PI * 2));
+  blades.add(mesh(mergeGeometries(bladeGeos), mats.blade));
+  const hub = new THREE.CylinderGeometry(r * 0.24, r * 0.24, size * 0.12, 28);
+  hub.rotateX(Math.PI / 2);
+  blades.add(mesh(hub, mats.plastic));
   g.add(blades);
-  g.userData = { ring, blades };
+  if (rgb) {
+    const ring = new THREE.TorusGeometry(r * 0.985, size * 0.012, 8, 64);
+    ring.translate(0, 0, size * 0.09);
+    g.add(mesh(ring, mats.rgb));
+  }
+  g.userData.blades = blades;
   return g;
 }
 
-export function createScene(canvas, { reducedMotion = false } = {}) {
+// perforated steel for the front panel, drawn once on a canvas
+function meshTexture() {
+  const c = document.createElement("canvas");
+  c.width = 288; c.height = 252;
+  const x = c.getContext("2d");
+  x.fillStyle = "#fff"; x.fillRect(0, 0, 288, 252);
+  x.fillStyle = "#000";
+  const r = 7.2, hw = r * Math.sqrt(3) / 2;
+  for (let j = -1; j < 13; j++) for (let i = -1; i < 12; i++) {
+    const cx = i * 24 + (j % 2 ? 12 : 0), cy = j * 21;
+    x.beginPath();
+    for (let a = 0; a < 6; a++) { const t = Math.PI / 6 + (a * Math.PI) / 3; x.lineTo(cx + r * Math.cos(t), cy + r * Math.sin(t)); }
+    x.closePath(); x.fill();
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(4, 9);
+  return t;
+}
+
+export function createScene(canvas, { reducedMotion = false, small = () => window.innerWidth < 900 } = {}) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
   } catch {
     return null;
   }
-  const small = () => window.innerWidth < 900;
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, small() ? 1.5 : 2));
-  // three.js clears render targets with the colour already converted to sRGB, and
-  // OutputPass converts again, so the page background came out washed-out lavender.
-  // Pre-linearise once more so the final pixel is exactly #0d0a1c.
+  renderer.toneMapping = THREE.NeutralToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  // three clears render targets with the colour already converted to sRGB and OutputPass
+  // converts again, so pre-linearise once more to land exactly on the page's #0d0a1c
   const bg = new THREE.Color(0x0d0a1c);
   renderer.setClearColor(new THREE.Color().setRGB(...bg.toArray(), THREE.SRGBColorSpace), 1);
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(0x0d0a1c, 16, 34);
-  const camera = new THREE.PerspectiveCamera(36, 1, 0.1, 100);
+  const pmrem = new THREE.PMREMGenerator(renderer);
+  scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+  const camera = new THREE.PerspectiveCamera(34, 1, 0.1, 100);
+
+  // lights: cool key from the front, magenta rim from behind, violet glow inside the case
+  scene.add(new THREE.HemisphereLight(0x8c7fd1, 0x0d0a1c, 0.35));
+  const key = new THREE.DirectionalLight(0xf3eefe, 1.6);
+  key.position.set(6, 9, 8);
+  scene.add(key);
+  const rim = new THREE.PointLight(0xc42f7b, 45, 0, 2);
+  rim.position.set(-4.5, 0.6, -5.5);
+  scene.add(rim);
+  const rim2 = new THREE.PointLight(0x5a2a88, 60, 0, 2);
+  rim2.position.set(5, -2, -6);
+  scene.add(rim2);
 
   const world = new THREE.Group();
   scene.add(world);
   const pc = new THREE.Group();
   world.add(pc);
+  const inner = new THREE.PointLight(0xb9ccff, 6, 4.5, 2);
+  inner.position.set(0.3, 0.6, 0.6);
+  pc.add(inner);
 
-  // ----- the case (x = width, y = height, z = depth; front faces +z) -----
-  const W = 2.2, H = 4.6, D = 4.8;
-  const caseShell = part(new THREE.BoxGeometry(W, H, D), 0.3, { fill: 0.07, edge: 0.95 });
-  pc.add(caseShell);
-  const glass = part(new THREE.PlaneGeometry(D - 0.2, H - 0.2), 0.3, { fill: 0.1, edge: 0.8 });
-  glass.rotation.y = Math.PI / 2;
-  glass.position.x = W / 2 + 0.01;
-  pc.add(glass);
+  // ---------- materials ----------
+  const M = {
+    steel: std(0x16141d, { metal: 0.85, rough: 0.38, h: 0.16 }),
+    steelIn: std(0x100e16, { metal: 0.6, rough: 0.62, h: 0.16 }),
+    front: std(0x1c1a24, { metal: 0.9, rough: 0.32, h: 0.14 }),
+    pcb: std(0x15121c, { metal: 0.25, rough: 0.7, h: 0.32 }),
+    sink: std(0x2b2834, { metal: 0.9, rough: 0.3, h: 0.5 }),
+    fin: std(0x9b98a6, { metal: 1, rough: 0.28, h: 0.58 }),
+    copper: std(0xb87333, { metal: 1, rough: 0.25, h: 0.62 }),
+    gpu: std(0x1b1922, { metal: 0.55, rough: 0.38, h: 0.9 }),
+    gpuPlate: std(0x2a2733, { metal: 0.85, rough: 0.3, h: 0.92 }),
+    plastic: std(0x121117, { metal: 0.1, rough: 0.55, h: 0.2 }),
+    blade: std(0x17151d, { metal: 0.1, rough: 0.45, h: 0.2 }),
+    gpuBlade: std(0x17151d, { metal: 0.1, rough: 0.45, h: 0.85 }),
+    ram: std(0x26232e, { metal: 0.85, rough: 0.3, h: 0.42 }),
+    sleeve: std(0x1b1824, { metal: 0.1, rough: 0.82, h: 0.3 }),
+    shroud: std(0x17151e, { metal: 0.75, rough: 0.42, h: 0.45 }),
+    rgb: std(0x000000, { metal: 0, rough: 1, h: 0.25, emissive: 0xcfe0ff, ei: 2.4 }),
+    rgbHot: std(0x000000, { metal: 0, rough: 1, h: 0.9, emissive: 0xdbe8ff, ei: 2.2 }),
+    logo: std(0x000000, { metal: 0, rough: 1, h: 0.95, emissive: 0xf4f7ff, ei: 1.5 }),
+  };
+  const glassMat = thermal(new THREE.MeshPhysicalMaterial({
+    color: 0x1a1726, metalness: 0, roughness: 0.04, transparent: true, opacity: 0.22, envMapIntensity: 1.6, depthWrite: false,
+  }), 0.12);
+  const frontMat = thermal(new THREE.MeshStandardMaterial({ color: 0x1c1a24, metalness: 0.9, roughness: 0.35, alphaMap: meshTexture(), alphaTest: 0.5, side: THREE.DoubleSide }), 0.14);
+  const emissives = [M.rgb, M.rgbHot, M.logo];
 
+  // ---------- the case ----------
+  const W = 2.3, H = 4.9, D = 4.9, T = 0.06;
   const parts = {};
-  parts.board = part(new THREE.BoxGeometry(0.05, 3.7, 3.9), 0.14, { fill: 0.14 });
-  parts.board.position.set(-W / 2 + 0.12, 0.25, 0.1);
-  parts.cpu = new THREE.Group();
-  for (let i = 0; i < 12; i++) {
-    const fin = part(new THREE.BoxGeometry(0.72, 0.022, 0.95), 0.5, { fill: 0.2 });
-    fin.position.y = i * 0.075;
-    parts.cpu.add(fin);
-  }
-  parts.cpu.position.set(-0.55, 0.95, 0.55);
-  parts.ram = new THREE.Group();
+  const add = (name, obj, parent = pc) => { parts[name] = obj; obj.userData.base = obj.position.clone(); parent.add(obj); return obj; };
+
+  const shell = new THREE.Group();
+  at(shell, mesh(rbox(T, H, D, 0.025), M.steel), -W / 2, 0, 0);
+  const bottom = mesh(rbox(W, T, D, 0.025), M.steel); bottom.position.set(0, -H / 2, 0); shell.add(bottom);
+  const back = mesh(rbox(W, H, T, 0.025), M.steelIn); back.position.set(0, 0, -D / 2); shell.add(back);
+  // front trim frame around the mesh
+  const trimGeos = [place(box(W, 0.12, 0.08), 0, H / 2 - 0.06, 0), place(box(W, 0.12, 0.08), 0, -H / 2 + 0.06, 0),
+    place(box(0.1, H, 0.08), -W / 2 + 0.05, 0, 0), place(box(0.1, H, 0.08), W / 2 - 0.05, 0, 0)];
+  const trim = mesh(mergeGeometries(trimGeos), M.front); trim.position.z = D / 2; shell.add(trim);
+  // feet
+  const feet = [];
+  for (const [fx, fz] of [[-0.8, 1.9], [0.8, 1.9], [-0.8, -1.9], [0.8, -1.9]]) feet.push(place(new THREE.CylinderGeometry(0.13, 0.15, 0.12, 20), fx, -H / 2 - 0.08, fz));
+  shell.add(mesh(mergeGeometries(feet), M.plastic));
+  // rear: I/O and PCIe slot covers
+  const rearGeos = [];
+  for (let i = 0; i < 6; i++) rearGeos.push(place(box(0.9, 0.08, 0.02), 0.25, -0.2 - i * 0.16, -D / 2 - 0.035));
+  rearGeos.push(place(box(0.42, 1.0, 0.02), -0.62, 1.7, -D / 2 - 0.035));
+  shell.add(mesh(mergeGeometries(rearGeos), M.sink));
+  add("shell", shell);
+
+  const top = add("top", mesh(rbox(W, T, D, 0.025), M.steel));
+  top.position.set(0, H / 2, 0); top.userData.base = top.position.clone();
+  const front = add("front", mesh(new THREE.PlaneGeometry(W - 0.2, H - 0.24), frontMat));
+  front.position.set(0, 0, D / 2 + 0.03); front.userData.base = front.position.clone();
+  const glass = add("glass", mesh(rbox(0.02, H - 0.1, D - 0.1, 0.01), glassMat));
+  glass.position.set(W / 2, 0, 0); glass.userData.base = glass.position.clone();
+
+  // ---------- motherboard and what sits on it ----------
+  const X0 = -W / 2 + 0.14; // board surface
+  const board = new THREE.Group();
+  at(board, mesh(box(0.04, 3.7, 3.9), M.pcb), X0 - 0.02, 0.35, -0.3);
+  const slotGeos = [place(box(0.06, 0.07, 1.8), X0 + 0.03, -0.12, -1.0), place(box(0.06, 0.07, 1.8), X0 + 0.03, -1.05, -1.0),
+    place(box(0.14, 0.85, 0.16), X0 + 0.07, 0.75, 1.55)];
+  board.add(mesh(mergeGeometries(slotGeos), M.plastic));
+  add("board", board);
+
+  const vrm = new THREE.Group();
+  vrm.add(mesh(mergeGeometries([place(rbox(0.24, 0.36, 1.25, 0.03), X0 + 0.12, 2.0, -0.55), place(rbox(0.24, 1.15, 0.34, 0.03), X0 + 0.12, 1.25, -1.6),
+    place(rbox(0.3, 0.95, 0.6, 0.04), X0 + 0.15, 1.72, -2.0)]), M.sink));
+  at(vrm, mesh(box(0.02, 0.6, 0.05), M.rgb), X0 + 0.31, 1.72, -1.68);
+  add("vrm", vrm);
+
+  const chipset = new THREE.Group();
+  at(chipset, mesh(rbox(0.1, 0.75, 0.75, 0.03), M.sink), X0 + 0.05, -0.85, 0.9);
+  at(chipset, mesh(box(0.02, 0.4, 0.04), M.logo), X0 + 0.11, -0.85, 0.9);
+  add("chipset", chipset);
+
+  const m2 = new THREE.Group();
+  at(m2, mesh(rbox(0.07, 0.28, 1.0, 0.02), M.sink), X0 + 0.04, 0.38, -0.3);
+  add("m2", m2);
+
+  const ram = new THREE.Group();
   for (let i = 0; i < 4; i++) {
-    const s = part(new THREE.BoxGeometry(0.42, 1.0, 0.04), 0.32, { fill: 0.25 });
-    s.position.z = i * 0.12;
-    parts.ram.add(s);
+    at(ram, mesh(rbox(0.5, 1.32, 0.05, 0.015), M.ram), X0 + 0.25, 1.1, 0.33 + i * 0.12);
+    at(ram, mesh(box(0.05, 1.22, 0.052), M.rgb), X0 + 0.52, 1.1, 0.33 + i * 0.12);
   }
-  parts.ram.position.set(-0.68, 1.2, -0.45);
-  parts.gpu = new THREE.Group();
-  const gpuBody = part(new THREE.BoxGeometry(0.95, 0.32, 3.0), 0.9, { fill: 0.2 });
-  parts.gpu.add(gpuBody);
-  parts.gpuFans = [fan(0.42, 0.9), fan(0.42, 0.9)];
-  parts.gpuFans.forEach((f, i) => {
+  add("ram", ram);
+
+  // tower cooler: fin stack parallel to the board, copper heatpipes, fan on the intake side
+  const cooler = new THREE.Group();
+  const fins = [];
+  for (let i = 0; i < 26; i++) fins.push(place(box(0.018, 1.3, 1.02), X0 + 0.38 + i * 0.031, 1.15, -0.55));
+  cooler.add(mesh(mergeGeometries(fins), M.fin));
+  const pipes = [];
+  for (const [py, pz] of [[0.95, -0.75], [1.05, -0.35], [1.25, -0.75], [1.35, -0.35]]) {
+    const pg = new THREE.CylinderGeometry(0.035, 0.035, 0.95, 12);
+    pg.rotateZ(Math.PI / 2);
+    pipes.push(place(pg, X0 + 0.66, py, pz));
+  }
+  cooler.add(mesh(mergeGeometries(pipes), M.copper));
+  at(cooler, mesh(rbox(0.2, 0.55, 0.55, 0.03), M.copper), X0 + 0.1, 1.15, -0.55);
+  at(cooler, mesh(rbox(0.03, 1.32, 1.04, 0.012), M.gpuPlate), X0 + 1.2, 1.15, -0.55);
+  at(cooler, mesh(box(0.01, 0.06, 0.6), M.logo), X0 + 1.22, 1.15, -0.55);
+  const coolFan = fan(1.2, M);
+  coolFan.position.set(X0 + 0.78, 1.15, 0.05);
+  coolFan.rotation.y = 0;
+  cooler.add(coolFan);
+  add("cooler", cooler);
+
+  // GPU: fans face down toward the PSU shroud, backplate on top, lit logo on the edge facing the glass
+  const gpu = new THREE.Group();
+  const gx = X0 + 0.7, gy = -0.47, gz = -0.82;
+  at(gpu, mesh(rbox(1.26, 0.42, 3.1, 0.06), M.gpu), gx, gy, gz);
+  at(gpu, mesh(rbox(1.22, 0.05, 3.06, 0.02), M.gpuPlate), gx, gy + 0.24, gz);
+  at(gpu, mesh(box(0.012, 0.06, 1.7), M.logo), gx + 0.635, gy + 0.02, gz + 0.3);
+  at(gpu, mesh(box(0.012, 0.03, 2.8), M.rgbHot), gx + 0.635, gy - 0.16, gz);
+  at(gpu, mesh(box(0.2, 0.08, 0.32), M.plastic), gx + 0.45, gy + 0.3, gz + 1.0);
+  at(gpu, mesh(box(0.06, 0.62, 0.03), M.sink), gx - 0.3, gy + 0.05, -D / 2 + 0.08);
+  const gpuFanMats = { ...M, blade: M.gpuBlade, plastic: M.gpu };
+  const gpuFans = [-0.95, 0.05, 1.05].map((z) => {
+    const f = fan(0.88, gpuFanMats);
     f.rotation.x = Math.PI / 2;
-    f.position.set(0, -0.2, i === 0 ? 0.7 : -0.7);
-    parts.gpu.add(f);
-  });
-  parts.gpu.position.set(-0.5, -0.35, 0.25);
-  parts.ssd = part(new THREE.BoxGeometry(0.03, 0.22, 0.8), 0.45, { fill: 0.3 });
-  parts.ssd.position.set(-W / 2 + 0.17, 0.25, 1.35);
-  parts.psu = part(new THREE.BoxGeometry(1.9, 0.85, 1.7), 0.3, { fill: 0.14 });
-  parts.psu.position.set(0, -H / 2 + 0.5, -D / 2 + 1.0);
-  parts.frontFans = [1.25, 0, -1.25].map((y) => {
-    const f = fan(0.62, 0.15);
-    f.position.set(0, y + 0.3, D / 2 - 0.15);
-    pc.add(f);
+    f.position.set(gx, gy - 0.22, gz + z);
+    gpu.add(f);
     return f;
   });
-  Object.values(parts).forEach((p) => p.isObject3D && pc.add(p));
+  add("gpu", gpu);
 
-  // airflow: particles drift front to back, warming as they cross the GPU
-  const AIR = small() ? 140 : 260;
+  const shroudGrp = new THREE.Group();
+  at(shroudGrp, mesh(rbox(W - 0.14, 0.86, D - 0.55, 0.04), M.shroud), 0, -H / 2 + 0.49, -0.25);
+  at(shroudGrp, mesh(box(0.01, 0.05, 2.2), M.rgb), (W - 0.14) / 2 + 0.002, -H / 2 + 0.62, -0.25);
+  add("shroud", shroudGrp);
+
+  const frontFans = new THREE.Group();
+  const intake = [1.35, 0.0, -1.35].map((y) => {
+    const f = fan(1.28, M, { rgb: true });
+    f.position.set(0, y + 0.1, D / 2 - 0.16);
+    frontFans.add(f);
+    return f;
+  });
+  add("frontFans", frontFans);
+  const rear = add("rearFan", fan(1.0, M, { rgb: true }));
+  rear.position.set(0.1, 1.55, -D / 2 + 0.14); rear.userData.base = rear.position.clone();
+
+  // sleeved cables: 24-pin, GPU power, CPU power
+  const cable = (pts, r) => new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), 48, r, 10);
+  const cablesMat = M.sleeve.clone();
+  thermal(cablesMat, 0.3);
+  cablesMat.transparent = true;
+  const cables = add("cables", mesh(mergeGeometries([
+    cable([[X0 + 0.16, 0.75, 1.64], [X0 + 0.45, 0.72, 2.0], [X0 + 0.5, -0.4, 2.05], [X0 + 0.42, -1.05, 1.9]], 0.075),
+    cable([[gx + 0.45, gy + 0.34, gz + 1.0], [gx + 0.5, gy + 0.55, gz + 1.7], [gx + 0.3, gy - 0.3, gz + 2.0], [gx + 0.2, -1.05, gz + 1.8]], 0.05),
+    cable([[X0 + 0.12, 2.2, -1.95], [X0 + 0.4, 2.35, -1.6], [X0 + 0.5, 2.3, -0.2], [X0 + 0.3, 2.2, 0.4]], 0.04),
+  ]), cablesMat));
+
+  // exploded view: where each part goes (scaled by explode 0..1)
+  const EXPLODE = {
+    glass: [2.6, 0.5, 0], top: [0, 0.9, 0], front: [0, 0, 1.6], gpu: [1.6, -0.15, 0.1], cooler: [1.15, 0.2, 0],
+    ram: [0.8, 0.35, 0.15], vrm: [0.35, 0.25, -0.1], m2: [0.55, 0, 0.1], chipset: [0.45, -0.15, 0.15],
+    shroud: [0.7, -0.75, 0], frontFans: [0, 0, 0.85], rearFan: [0, 0, -0.9],
+  };
+
+  // ---------- airflow: particles visible in the thermal view ----------
+  const AIR = small() ? 150 : 280;
   const airGeo = new THREE.BufferGeometry();
   const airPos = new Float32Array(AIR * 3), airCol = new Float32Array(AIR * 3), airSeed = new Float32Array(AIR);
   for (let i = 0; i < AIR; i++) {
-    airPos[i * 3] = (Math.random() - 0.5) * (W - 0.5);
-    airPos[i * 3 + 1] = (Math.random() - 0.5) * (H - 0.8) + 0.2;
+    airPos[i * 3] = (Math.random() - 0.4) * (W - 0.4);
+    airPos[i * 3 + 1] = (Math.random() - 0.5) * (H - 1.4) + 0.3;
     airPos[i * 3 + 2] = (Math.random() - 0.5) * D;
     airSeed[i] = 0.6 + Math.random() * 0.8;
   }
   airGeo.setAttribute("position", new THREE.BufferAttribute(airPos, 3));
   airGeo.setAttribute("color", new THREE.BufferAttribute(airCol, 3));
-  const airMat = new THREE.PointsMaterial({ size: 0.05, vertexColors: true, transparent: true, opacity: 0.9, depthWrite: false, blending: THREE.AdditiveBlending });
-  const air = new THREE.Points(airGeo, airMat);
-  pc.add(air);
+  const airMat = new THREE.PointsMaterial({ size: 0.045, vertexColors: true, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending });
+  pc.add(new THREE.Points(airGeo, airMat));
 
-  // ----- virtual layers (Proxmox -> VM + LXC -> containers) -----
+  // ---------- virtual layers (always shown as heat: they're software) ----------
+  const glow = (geo, h, { fill = 0.14, edge = 1 } = {}) => {
+    const g = new THREE.Group();
+    const fm = new THREE.MeshBasicMaterial({ color: heat(h), transparent: true, opacity: fill, depthWrite: false, side: THREE.DoubleSide });
+    const em = new THREE.LineBasicMaterial({ color: heat(h), transparent: true, opacity: edge });
+    g.add(new THREE.Mesh(geo, fm));
+    g.add(new THREE.LineSegments(new THREE.EdgesGeometry(geo, 20), em));
+    g.userData = { fm, em, fill, edge, h };
+    return g;
+  };
+  const setGlow = (g, h, fade) => {
+    heat(h, g.userData.fm.color); heat(h, g.userData.em.color);
+    g.userData.fm.opacity = g.userData.fill * fade; g.userData.em.opacity = g.userData.edge * fade;
+  };
   const layers = new THREE.Group();
   world.add(layers);
-  const pve = part(new THREE.BoxGeometry(4.6, 0.1, 4.6), 0.3, { fill: 0.12 });
-  const vm = part(new THREE.BoxGeometry(2.3, 0.08, 3.8), 0.4, { fill: 0.14 });
-  const lxc = part(new THREE.BoxGeometry(1.6, 0.08, 2.0), 0.85, { fill: 0.18 });
-  vm.position.set(-1.0, 0, 0);
-  lxc.position.set(1.35, 0, 0.6);
+  const pve = glow(new THREE.BoxGeometry(4.8, 0.08, 4.8), 0.32, { fill: 0.1 });
+  const vm = glow(new THREE.BoxGeometry(2.4, 0.07, 3.9), 0.42, { fill: 0.12 });
+  const lxc = glow(new THREE.BoxGeometry(1.7, 0.07, 2.1), 0.85, { fill: 0.16 });
+  vm.position.set(-1.05, 0, 0);
+  lxc.position.set(1.4, 0, 0.6);
   layers.add(pve, vm, lxc);
   const apps = [];
   for (let i = 0; i < 14; i++) {
-    const c = part(new THREE.BoxGeometry(0.36, 0.36, 0.36), 0.35 + ((i * 37) % 10) / 22, { fill: 0.22 });
-    c.position.set(-1.55 + (i % 3) * 0.55, 0.25, -1.5 + Math.floor(i / 3) * 0.62);
+    const c = glow(new THREE.BoxGeometry(0.36, 0.36, 0.36), 0.36 + ((i * 37) % 10) / 22, { fill: 0.24 });
+    c.position.set(-1.6 + (i % 3) * 0.56, 0.25, -1.55 + Math.floor(i / 3) * 0.64);
     c.userData.phase = i * 0.7;
     vm.add(c);
     apps.push(c);
   }
-  const ollama = part(new THREE.OctahedronGeometry(0.3), 1, { fill: 0.3 });
-  ollama.position.set(0, 0.45, 0);
+  const ollama = glow(new THREE.OctahedronGeometry(0.32), 1, { fill: 0.35 });
+  ollama.position.set(0, 0.48, 0);
   lxc.add(ollama);
-
-  // GPU -> LXC: the card is shared into the AI container
-  const beamGeo = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]);
-  const beamMat = new THREE.LineDashedMaterial({ color: heat(0.95), dashSize: 0.18, gapSize: 0.12, transparent: true });
-  const beam = new THREE.Line(beamGeo, beamMat);
+  const beamMat = new THREE.LineDashedMaterial({ color: heat(0.95), dashSize: 0.18, gapSize: 0.12, transparent: true, opacity: 0 });
+  const beam = new THREE.Line(new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(), new THREE.Vector3(0, 1, 0)]), beamMat);
   world.add(beam);
 
-  // ----- outside links: phone (Tailscale), Backblaze B2, GitHub -----
+  // ---------- links out: phone (Tailscale), Backblaze B2, GitHub ----------
   const net = new THREE.Group();
   world.add(net);
   const nodes = [
-    { key: "phone", pos: new THREE.Vector3(4.0, 5.2, 0.6), h: 0.55 },
-    { key: "b2", pos: new THREE.Vector3(2.4, 7.4, -3.6), h: 0.7 },
-    { key: "github", pos: new THREE.Vector3(-1.2, 8.0, -3.4), h: 0.62 },
+    { key: "phone", pos: new THREE.Vector3(4.1, 5.3, 0.7), h: 0.55 },
+    { key: "b2", pos: new THREE.Vector3(2.5, 7.5, -3.7), h: 0.72 },
+    { key: "github", pos: new THREE.Vector3(-1.2, 8.1, -3.5), h: 0.62 },
   ].map((n) => {
-    const m = part(new THREE.IcosahedronGeometry(0.32, 0), n.h, { fill: 0.25 });
+    const m = glow(new THREE.IcosahedronGeometry(0.34, 0), n.h, { fill: 0.3 });
     m.position.copy(n.pos);
     net.add(m);
-    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-1, 4.6, 0), n.pos.clone().multiplyScalar(0.5).add(new THREE.Vector3(0, 2.2, 0)), n.pos);
+    const curve = new THREE.QuadraticBezierCurve3(new THREE.Vector3(-1, 4.7, 0), n.pos.clone().multiplyScalar(0.5).add(new THREE.Vector3(0, 2.2, 0)), n.pos);
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(curve.getPoints(48)), new THREE.LineBasicMaterial({ color: heat(n.h), transparent: true }));
     net.add(line);
     const packets = [0, 0.33, 0.66].map((o) => {
-      const p = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 8), new THREE.MeshBasicMaterial({ color: heat(0.98), transparent: true }));
+      const p = new THREE.Mesh(new THREE.SphereGeometry(0.06, 10, 10), new THREE.MeshBasicMaterial({ color: heat(0.98), transparent: true }));
       p.userData.offset = o;
       net.add(p);
       return p;
@@ -224,24 +442,27 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
     return { ...n, mesh: m, curve, line, packets };
   });
 
-  // ----- label anchors (screen positions are read by main.js) -----
+  // ---------- callout anchors (screen positions go to the page for the labels) ----------
+  const anchor = (parent, x, y, z) => { const o = new THREE.Object3D(); o.position.set(x, y, z); parent.add(o); return o; };
   const anchors = {
-    cpu: { obj: parts.cpu, at: new THREE.Vector3(0, 1.0, 0) },
-    gpu: { obj: parts.gpu, at: new THREE.Vector3(0.4, 0.1, -1.0) },
-    ssd: { obj: parts.ssd, at: new THREE.Vector3(0, 0, 0) },
-    psu: { obj: parts.psu, at: new THREE.Vector3(0.9, 0.2, 0.6) },
-    pve: { obj: pve, at: new THREE.Vector3(2.3, 0, 2.3) },
-    vm: { obj: vm, at: new THREE.Vector3(-1.15, 0.5, 1.9) },
-    lxc: { obj: lxc, at: new THREE.Vector3(0.8, 0.3, 1.0) },
-    phone: { obj: nodes[0].mesh, at: new THREE.Vector3(0, 0.45, 0) },
-    b2: { obj: nodes[1].mesh, at: new THREE.Vector3(0, 0.45, 0) },
-    github: { obj: nodes[2].mesh, at: new THREE.Vector3(0, 0.45, 0) },
+    gpu: anchor(gpu, gx + 0.64, gy, gz + 0.9),
+    cpu: anchor(cooler, X0 + 1.22, 1.6, -0.55),
+    ram: anchor(ram, X0 + 0.53, 1.75, 0.5),
+    ssd: anchor(m2, X0 + 0.08, 0.38, 0.15),
+    psu: anchor(shroudGrp, W / 2 - 0.07, -H / 2 + 0.75, 1.3),
+    fans: anchor(frontFans, 0.5, 1.95, D / 2 - 0.1),
+    pve: anchor(pve, 2.4, 0, 2.4),
+    vm: anchor(vm, -1.2, 0.5, 1.95),
+    lxc: anchor(lxc, 0.85, 0.3, 1.05),
+    phone: anchor(nodes[0].mesh, 0, 0.45, 0),
+    b2: anchor(nodes[1].mesh, 0, 0.45, 0),
+    github: anchor(nodes[2].mesh, 0, 0.45, 0),
   };
 
-  // ----- post: bloom makes the hot parts glow -----
+  // ---------- post-processing ----------
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
-  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.85, 0.55, 0.12);
+  const bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.55, 0.42, 0.68);
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
@@ -251,63 +472,82 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
     composer.setSize(w, h);
     bloom.resolution.set(w / 2, h / 2);
     camera.aspect = w / h;
-    // on wide screens push the machine right of the text column
-    if (w >= 900) camera.setViewOffset(w, h, -w * 0.22, 0, w, h);
+    if (w >= 900) camera.setViewOffset(w, h, -w * 0.21, 0, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
   resize();
   window.addEventListener("resize", resize);
 
-  const tmp = new THREE.Vector3(), tmpC = new THREE.Color();
-  let idle = 0, last = performance.now(), state = mixKeys(0);
+  const tmp = new THREE.Vector3(), tmpB = new THREE.Vector3(), tmpC = new THREE.Color();
+  const born = performance.now();
+  let last = born, k = mixKeys(0), cur = 0;
 
-  function render(s, now = performance.now()) {
+  function render(p, now = performance.now()) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
-    const k = (state = mixKeys(s));
+    cur = p;
+    k = mixKeys(p);
     const t = now / 1000;
+    const sm = small();
 
-    // camera (pulled back a little on phones so the whole case fits)
-    const far = small() ? 1.35 : 1;
-    camera.position.set(k.cam[0] * far, k.cam[1] * (small() ? 1.08 : 1), k.cam[2] * far);
-    // phones: hero text sits at the bottom, so raise the machine into the top half
-    const lift = small() ? lerp(-1.9, 0.6, clamp01(state.open + state.dim)) : 0;
+    // power-on moment when the page first loads: RGB and fans come up in sequence
+    const age = (now - born) / 1000;
+    const power = reducedMotion ? 1 : ease(clamp01((age - 0.3) / 1.4));
+    emissives.forEach((m, i) => { m.emissiveIntensity = m.userData.ei * ease(clamp01(power * 1.6 - i * 0.25)); });
+
+    // camera
+    const far = sm ? 1.72 : 1;
+    camera.position.set(k.cam[0] * far, k.cam[1] * (sm ? 1.05 : 1), k.cam[2] * far);
+    const lift = sm ? lerp(-1.75, 0.4, clamp01(p)) : 0;
     camera.lookAt(k.target[0], k.target[1] + lift, k.target[2]);
 
-    // slow turntable when idle; settles to face the camera when a chapter needs it
-    if (!reducedMotion) idle += dt * 0.28;
-    let a = ((idle + Math.PI) % (Math.PI * 2)) - Math.PI;
-    pc.rotation.y = a * k.spin;
-    layers.rotation.y = pc.rotation.y;
-    net.rotation.y = pc.rotation.y;
+    // gentle product-turntable sway in the hero
+    const sway = reducedMotion ? 0 : Math.sin(t * 0.32) * 0.42;
+    pc.rotation.y = (sway - 0.12) * k.sway;
+    layers.rotation.y = net.rotation.y = pc.rotation.y;
 
-    // side panel slides out and fades
-    glass.position.x = W / 2 + 0.01 + k.open * 2.4;
-    glass.position.y = k.open * 0.6;
-    setHeat(glass, 0.3, (1 - k.open) * (1 - k.caseFade));
-    setHeat(caseShell, 0.3, 1 - k.caseFade * 0.75);
+    // thermal scan: sweeps top to bottom between the hero and the first chapter
+    const scan = window01(p, 0.08, 0.72);
+    G.uScan.value = lerp(H / 2 + 0.25, -H / 2 - 0.35, scan);
+    G.uBand.value = scan > 0 && scan < 1 ? 1 : 0;
 
-    // heat: the GPU runs the model, the CPU follows, the rest stays cool
-    const flicker = reducedMotion ? 0 : Math.sin(t * 7.3) * 0.02 + Math.sin(t * 2.1) * 0.03;
+    // exploded view
+    const ex = k.explode;
+    for (const name in EXPLODE) {
+      const o = parts[name], d = EXPLODE[name];
+      o.position.set(o.userData.base.x + d[0] * ex, o.userData.base.y + d[1] * ex, o.userData.base.z + d[2] * ex);
+    }
+    glassMat.opacity = 0.22 * (1 - ex);
+    glass.visible = ex < 0.98;
+    cablesMat.opacity = 1 - ex;
+    cables.visible = ex < 0.98;
+
+    // heat: the GPU runs the model, everything else follows; cools once the story moves to software
+    const flicker = reducedMotion ? 0 : Math.sin(t * 7.3) * 0.015 + Math.sin(t * 2.1) * 0.025;
     const g = clamp01(k.gpu + flicker);
-    const inside = 1 - k.caseFade * 0.5;
-    parts.gpu.children.forEach((c) => c.userData.fillMat && setHeat(c, g, inside));
-    parts.gpuFans.forEach((f) => {
-      f.traverse((c) => c.userData && c.userData.fillMat && setHeat(c, g * 0.95, inside));
-      if (!reducedMotion) f.userData.blades.rotation.z += dt * (6 + g * 22);
-    });
-    parts.cpu.children.forEach((c, i) => setHeat(c, clamp01(0.3 + g * 0.35 - i * 0.012), inside));
-    parts.ram.children.forEach((c) => setHeat(c, 0.28 + g * 0.1, inside));
-    setHeat(parts.board, 0.14 + g * 0.08, inside);
-    setHeat(parts.ssd, 0.4 + g * 0.1, inside);
-    setHeat(parts.psu, 0.3 + g * 0.15, inside);
-    parts.frontFans.forEach((f) => {
-      f.traverse((c) => c.userData && c.userData.fillMat && setHeat(c, 0.12, inside));
-      if (!reducedMotion) f.userData.blades.rotation.z += dt * 5;
-    });
+    const cool = 1 - k.cool;
+    M.gpu.userData.heat.value = g * cool;
+    M.gpuPlate.userData.heat.value = clamp01(g + 0.03) * cool;
+    M.gpuBlade.userData.heat.value = g * 0.85 * cool;
+    M.rgbHot.userData.heat.value = g * cool;
+    M.fin.userData.heat.value = (0.4 + g * 0.25) * cool;
+    M.copper.userData.heat.value = (0.45 + g * 0.25) * cool;
+    M.sink.userData.heat.value = (0.38 + g * 0.18) * cool;
+    M.ram.userData.heat.value = (0.33 + g * 0.1) * cool;
+    M.pcb.userData.heat.value = (0.22 + g * 0.12) * cool;
+    M.shroud.userData.heat.value = (0.32 + g * 0.15) * cool;
 
-    // airflow
+    // fans
+    if (!reducedMotion) {
+      const spin = dt * (3 + power * 9);
+      intake.forEach((f) => (f.userData.blades.rotation.z += spin));
+      rear.userData.blades.rotation.z -= spin;
+      coolFan.userData.blades.rotation.z += spin * (0.8 + g * 0.6);
+      gpuFans.forEach((f, i) => (f.userData.blades.rotation.z += dt * (2 + g * 26) * (i % 2 ? -1 : 1)));
+    }
+
+    // airflow (thermal view only)
     const speed = reducedMotion ? 0 : 0.9 + g * 1.6;
     for (let i = 0; i < AIR; i++) {
       let z = airPos[i * 3 + 2] - dt * speed * airSeed[i];
@@ -319,71 +559,77 @@ export function createScene(canvas, { reducedMotion = false } = {}) {
     }
     airGeo.attributes.position.needsUpdate = true;
     airGeo.attributes.color.needsUpdate = true;
-    airMat.opacity = 0.85 * inside;
+    airMat.opacity = 0.85 * scan * (1 - ex * 0.6) * cool;
 
     // layers rise out of the case
     const L = k.layers;
-    layers.position.y = lerp(0, 3.4, L);
-    layers.scale.setScalar(lerp(0.4, 1, L));
     layers.visible = L > 0.01;
-    setHeat(pve, 0.3, L);
-    setHeat(vm, 0.42, L);
-    vm.position.y = lerp(0, 1.0, L);
-    lxc.position.y = lerp(0, 1.0, L);
-    setHeat(lxc, 0.5 + g * 0.4, L);
+    layers.position.y = lerp(0, 3.5, L);
+    layers.scale.setScalar(lerp(0.4, 1, L));
+    setGlow(pve, 0.32, L);
+    setGlow(vm, 0.42, L);
+    vm.position.y = lxc.position.y = lerp(0, 1.0, L);
+    setGlow(lxc, 0.55 + g * 0.35, L);
     apps.forEach((c) => {
       const pulse = reducedMotion ? 0 : (Math.sin(t * 1.4 + c.userData.phase) + 1) * 0.12;
-      setHeat(c, c.userData.h + pulse, L);
+      setGlow(c, c.userData.h + pulse, L);
       c.position.y = 0.25 + (reducedMotion ? 0 : Math.sin(t * 1.4 + c.userData.phase) * 0.04);
     });
-    setHeat(ollama, g, L);
+    setGlow(ollama, g, L);
     if (!reducedMotion) ollama.rotation.y += dt * 1.2;
-
-    // GPU -> AI container beam
-    parts.gpu.getWorldPosition(tmp);
-    const top = lxc.getWorldPosition(new THREE.Vector3());
-    beam.geometry.setFromPoints([tmp.clone(), top]);
+    gpu.getWorldPosition(tmp);
+    tmp.set(gx, gy, gz);
+    gpu.localToWorld(tmp);
+    lxc.getWorldPosition(tmpB);
+    beam.geometry.setFromPoints([tmp, tmpB]);
     beam.computeLineDistances();
     beamMat.opacity = L * 0.9;
     beam.visible = L > 0.05;
     if (!reducedMotion) beamMat.dashOffset = -t * 0.6;
 
-    // outside links
     const N = k.net;
     net.visible = N > 0.01;
     nodes.forEach((n, j) => {
-      setHeat(n.mesh, n.h, N);
+      setGlow(n.mesh, n.h, N);
       if (!reducedMotion) n.mesh.rotation.y += dt * 0.6;
       n.line.material.opacity = N * 0.7;
-      n.packets.forEach((p) => {
-        const u = reducedMotion ? p.userData.offset : (t * 0.22 + p.userData.offset + j * 0.11) % 1;
-        p.position.copy(n.curve.getPoint(u));
-        p.material.opacity = N;
+      n.packets.forEach((pk) => {
+        const u = reducedMotion ? pk.userData.offset : (t * 0.22 + pk.userData.offset + j * 0.11) % 1;
+        pk.position.copy(n.curve.getPoint(u));
+        pk.material.opacity = N;
       });
     });
 
-    canvas.style.opacity = String(lerp(1, 0.32, k.dim));
     composer.render();
   }
 
-  // where each label should sit on screen, plus how visible its chapter is
+  // where each label sits on screen, and how visible it should be right now
   function labelPositions() {
-    const k = state, out = {};
-    const w = window.innerWidth, h = window.innerHeight;
+    const out = {}, w = window.innerWidth, h = window.innerHeight;
+    const ex = k.explode;
     const show = {
-      cpu: k.open * (1 - k.layers), gpu: k.open * (1 - k.layers), ssd: k.open * (1 - k.layers), psu: k.open * (1 - k.layers),
-      pve: k.layers * (1 - k.net) * (1 - k.dim), vm: k.layers * (1 - k.dim), lxc: k.layers * (1 - k.dim),
+      gpu: ex, cpu: ex, ram: ex, ssd: small() ? 0 : ex, psu: ex, fans: small() ? 0 : ex,
+      pve: k.layers * (1 - k.net), vm: k.layers, lxc: k.layers,
       phone: k.net, b2: k.net, github: k.net,
     };
+    const fade = 1 - clamp01((cur - 3.2) / 0.5);
     for (const key in anchors) {
-      const { obj, at } = anchors[key];
-      tmp.copy(at);
-      obj.localToWorld(tmp);
+      anchors[key].getWorldPosition(tmp);
       tmp.project(camera);
-      out[key] = { x: (tmp.x * 0.5 + 0.5) * w, y: (-tmp.y * 0.5 + 0.5) * h, v: tmp.z < 1 ? show[key] : 0 };
+      out[key] = { x: (tmp.x * 0.5 + 0.5) * w, y: (-tmp.y * 0.5 + 0.5) * h, v: tmp.z < 1 ? show[key] * fade : 0 };
     }
     return out;
   }
 
-  return { render, labelPositions, resize };
+  // older phones: drop resolution and the glow pass if frames come too slowly
+  let lowPower = false;
+  function lowerQuality() {
+    if (lowPower) return;
+    lowPower = true;
+    renderer.setPixelRatio(1);
+    bloom.enabled = false;
+    resize();
+  }
+
+  return { render, labelPositions, resize, lowerQuality };
 }
