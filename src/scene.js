@@ -164,7 +164,7 @@ function meshTexture() {
   return t;
 }
 
-export function createScene(canvas, { reducedMotion = false, small = () => window.innerWidth < 900 } = {}) {
+export function createScene(canvas, { reducedMotion = false, small = () => window.innerWidth < 900 || window.innerHeight < 520 } = {}) {
   let renderer;
   try {
     renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: "high-performance" });
@@ -474,7 +474,7 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     composer.setSize(w, h);
     bloom.resolution.set(w / 2, h / 2);
     camera.aspect = w / h;
-    if (w >= 900) camera.setViewOffset(w, h, -w * 0.21, 0, w, h);
+    if (!small()) camera.setViewOffset(w, h, -w * 0.21, 0, w, h);
     else camera.clearViewOffset();
     camera.updateProjectionMatrix();
   }
@@ -502,12 +502,12 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     // camera
     // phones are tall and narrow: pull back further and push the scene into the top half,
     // above the text panel (per-keyframe values in KEYS[].m)
-    const fit = sm && area ? Math.min(1.8, Math.max(0.75, 0.5 / Math.max(0.2, (area.bottom - area.top) / VH))) : 1;
-    const far = sm ? k.m[0] * fit : 1;
+    // phones and short screens: the camera distance (fitS) and the projection shift (offX/offY)
+    // are adjusted every frame so the scene's real on-screen bounds fit the free area (see autoFit)
+    const far = sm ? (area ? k.m[0] * fitS : k.m[0]) : 1;
     const lift = sm && !area ? k.m[1] : 0;
     if (sm && area) {
-      // centre the scene in the free band by shifting the projection, whatever the screen height
-      camera.setViewOffset(VW, VH, 0, VH / 2 - (area.top + area.bottom) / 2, VW, VH);
+      camera.setViewOffset(VW, VH, offX, offY, VW, VH);
       camera.updateProjectionMatrix();
     }
     camera.position.set(k.target[0] + (k.cam[0] - k.target[0]) * far, k.target[1] + lift + (k.cam[1] - k.target[1]) * far, k.target[2] + (k.cam[2] - k.target[2]) * far);
@@ -611,8 +611,45 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
       });
     });
 
+    if (sm && area) autoFit(area);
     composer.render();
   }
+
+  // ---------- auto-fit for phones (portrait and landscape) ----------
+  // Measure where the subject actually lands on screen and nudge distance and centring so it
+  // sits inside the free area. Converges within a few frames and keeps adapting while the
+  // story moves, the text box changes height, or the phone rotates.
+  let fitS = 1, offX = 0, offY = 0;
+  const fitBox = new THREE.Box3(), partBox = new THREE.Box3(), corner = new THREE.Vector3();
+  function autoFit(a) {
+    const L = k.layers, N = k.net;
+    fitBox.makeEmpty();
+    if (L < 0.5) fitBox.expandByObject(pc);
+    else {
+      // once the layers are up, frame them plus the top of the case, not the whole tower
+      partBox.makeEmpty().expandByObject(pc);
+      partBox.min.y = Math.max(partBox.min.y, partBox.max.y - 1.4);
+      fitBox.union(partBox);
+      fitBox.expandByObject(layers);
+    }
+    if (N > 0.5) nodes.forEach((n) => fitBox.expandByObject(n.mesh));
+    if (fitBox.isEmpty()) return;
+    camera.updateMatrixWorld();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      corner.set(i & 1 ? fitBox.max.x : fitBox.min.x, i & 2 ? fitBox.max.y : fitBox.min.y, i & 4 ? fitBox.max.z : fitBox.min.z).project(camera);
+      const sx = (corner.x * 0.5 + 0.5) * VW, sy = (-corner.y * 0.5 + 0.5) * VH;
+      x0 = Math.min(x0, sx); x1 = Math.max(x1, sx); y0 = Math.min(y0, sy); y1 = Math.max(y1, sy);
+    }
+    const aw = Math.max(40, a.right - a.left), ah = Math.max(40, a.bottom - a.top);
+    // bounding boxes of rotated parts overestimate a little, so allow a slight overfill
+    const ratio = Math.max((x1 - x0) / (aw * 1.0), (y1 - y0) / (ah * 0.96));
+    fitS = Math.min(5, Math.max(0.45, fitS * Math.pow(ratio, 0.3)));
+    offX += ((x0 + x1) / 2 - (a.left + a.right) / 2) * 0.3;
+    offY += ((y0 + y1) / 2 - (a.top + a.bottom) / 2) * 0.3;
+    lastFit = { x0, x1, y0, y1 };
+  }
+  let lastFit = null;
 
   // where each label sits on screen, and how visible it should be right now
   function labelPositions() {
@@ -644,5 +681,5 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     resize();
   }
 
-  return { render, labelPositions, resize, lowerQuality };
+  return { render, labelPositions, resize, lowerQuality, fitInfo: () => lastFit };
 }

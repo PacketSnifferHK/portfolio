@@ -80,7 +80,7 @@ for (const key in OFFSET) {
   paths[key] = { p, c };
 }
 function placeLabels(pos) {
-  const w = window.innerWidth, small = w < 900;
+  const w = window.innerWidth, small = w < 900 || window.innerHeight < 520;
   for (const key in labels) {
     const el = labels[key], q = pos[key];
     el.style.opacity = q.v.toFixed(3);
@@ -93,6 +93,8 @@ function placeLabels(pos) {
       const lw = el.offsetWidth;
       if (q.x + dx + lw > w - 12) dx = -Math.abs(dx);
       if (q.x + dx - lw < 12 && dx < 0) dx = Math.abs(dx);
+      // keep labels out from under the text box (phones in landscape put it on the left)
+      if (area && q.x + dx - lw < area.left && dx < 0) dx = Math.abs(dx);
       if (small && q.x + dx + lw > w - 8) { el.style.opacity = "0"; p.style.opacity = c.style.opacity = "0"; continue; }
       const ex = q.x + dx, ey = q.y + dy, kx = q.x + dx * 0.45;
       p.setAttribute("d", `M${q.x.toFixed(1)},${q.y.toFixed(1)} L${kx.toFixed(1)},${ey.toFixed(1)} L${ex.toFixed(1)},${ey.toFixed(1)}`);
@@ -120,6 +122,7 @@ async function bootScene() {
   }
   if (!stage) { document.documentElement.classList.add("no-webgl"); return; }
   canvas.classList.add("ready");
+  if (capture) window.__stage = stage; // lets the automated device tests read the 3D bounds
 }
 if ("requestIdleCallback" in window) requestIdleCallback(bootScene, { timeout: 600 });
 else setTimeout(bootScene, 200);
@@ -143,18 +146,27 @@ function watchFps(now) {
 const statusEl = $(".status");
 let area = null;
 function freeArea(p) {
-  if (window.innerWidth >= 900) return null;
-  const vh = window.innerHeight, top = 64;
-  let bottom;
-  if (p < 0.5) bottom = Math.max(statusEl.getBoundingClientRect().top - 12, vh * 0.5);
-  else {
-    let best = null, bo = 0.25;
-    beats.forEach((b) => { const o = parseFloat(b.style.opacity || "0"); if (o > bo) { bo = o; best = b; } });
-    bottom = best ? best.getBoundingClientRect().top - 12 : area ? area.bottom : vh * 0.5;
+  const vw = window.innerWidth, vh = window.innerHeight;
+  const landscape = vh < 520 && vw > vh;
+  if (vw >= 900 && !landscape) return null;
+  const top = 64;
+  let active = null, bo = 0.25;
+  if (p >= 0.5) beats.forEach((b) => { const o = parseFloat(b.style.opacity || "0"); if (o > bo) { bo = o; active = b; } });
+  let target;
+  if (landscape) {
+    // text on the left, scene in the space to its right
+    let right;
+    if (p < 0.5) right = Math.max(...$$(".hero > *").map((el) => el.getBoundingClientRect().right));
+    else right = active ? active.getBoundingClientRect().right : area ? area.left - 16 : vw * 0.5;
+    target = { left: Math.min(vw * 0.62, right + 16), right: vw - 10, top: top - 8, bottom: vh - 10 };
+  } else {
+    let bottom;
+    if (p < 0.5) bottom = Math.max(statusEl.getBoundingClientRect().top - 12, vh * 0.45);
+    else bottom = active ? active.getBoundingClientRect().top - 12 : area ? area.bottom : vh * 0.5;
+    target = { left: 8, right: vw - 8, top, bottom: Math.max(top + vh * 0.22, bottom) };
   }
-  const target = { top, bottom: Math.max(top + vh * 0.28, bottom) };
   if (!area || reduced || capture) area = target;
-  else area = { top, bottom: area.bottom + (target.bottom - area.bottom) * 0.12 };
+  else for (const key in target) area[key] += (target[key] - area[key]) * 0.15;
   return area;
 }
 
