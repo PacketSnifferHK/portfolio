@@ -204,9 +204,11 @@
       <section class="about" id="about">
         <h2 class="reveal">About me</h2>
         <div class="about-grid">
-          <figure class="portrait">
-            <img src="./img/portrait.webp" width="560" height="560" alt="Harsh Kapoor smiling at his Brock University convocation">
-          </figure>
+          <button class="portrait" type="button" aria-pressed="false" aria-label="Harsh Kapoor smiling at his Brock University convocation. Press to turn the photo into ASCII art">
+            <img src="./img/portrait.webp" width="560" height="560" alt="">
+            <canvas aria-hidden="true"></canvas>
+            <span class="portrait-badge" aria-hidden="true">&gt;_</span>
+          </button>
           <div class="about-text">
             <p class="about-lede">I’m a DevOps engineer at Concentrix in Toronto: AWS and bare-metal infrastructure, CI/CD, infrastructure as code, and being on call when something breaks at 3 a.m.</p>
             <p>Before that I spent two and a half years at Ontario’s Ministry of Transportation doing the same kind of work for provincial systems. The homelab is where I try things on my own terms, from GPU monitoring to running language models locally. I studied Computer Science at Brock University, and I’m working toward Kubernetes (CKAD) and the CCNA.</p>

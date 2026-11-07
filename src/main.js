@@ -4,6 +4,7 @@ import { gsap } from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { SplitText } from "gsap/SplitText";
 import Lenis from "lenis";
+import { asciiPortrait } from "./ascii.js";
 
 gsap.registerPlugin(ScrollTrigger, SplitText);
 
@@ -193,6 +194,10 @@ if (finePointer && !reduced) {
     el.addEventListener("pointerleave", () => { xTo(0); yTo(0); });
   });
 }
+
+// ---------- portrait: photo turns into ASCII on hover or tap ----------
+const portrait = $(".portrait");
+if (portrait) asciiPortrait(portrait, { reduced });
 
 // ---------- contact form: send without leaving the page ----------
 const form = $(".form");
