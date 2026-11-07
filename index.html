@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Harsh Kapoor</title>
-  <meta name="description" content="Harsh Kapoor, QA and systems engineer moving into DevOps. A scroll-through of the homelab I run on my old gaming PC, plus my projects and experience.">
+  <meta name="description" content="Harsh Kapoor, DevOps engineer in Toronto. A scroll-through of the homelab I run on my old gaming PC, plus my projects and experience.">
   <meta property="og:title" content="Harsh Kapoor">
   <meta property="og:description" content="My old gaming PC is now a home server running 14 apps and a local AI. Scroll through it, then see what else I've built.">
   <meta property="og:type" content="website">
@@ -48,9 +48,9 @@
 
   <main id="main">
     <section class="hero" id="top">
-      <p class="status"><span class="pulse" aria-hidden="true"></span>Open to DevOps, cloud and QA automation roles</p>
+      <p class="status"><span class="pulse" aria-hidden="true"></span>DevOps engineer in Toronto</p>
       <h1 class="name"><span class="name-line">Harsh</span> <span class="name-line">Kapoor</span></h1>
-      <p class="lede">I build infrastructure that actually runs. My old gaming PC is now a home server with fourteen apps and a local AI, and I run it like production.</p>
+      <p class="lede">By day I keep AWS and bare-metal infrastructure running. At home, my old gaming PC is a server with fourteen apps and a local AI, and I run it like production too.</p>
       <div class="actions">
         <a class="btn btn-hot magnetic" href="#homelab">Open up the machine</a>
         <a class="btn magnetic" href="./docs/harsh-kapoor-resume.pdf" target="_blank" rel="noopener">Résumé (PDF)</a>
@@ -178,7 +178,7 @@
 
           <article class="card" style="--i:4">
             <div class="card-text">
-              <p class="card-kicker">Research</p>
+              <p class="card-kicker">Research, 2023 to 2024</p>
               <h3>Observability for a 5G core</h3>
               <p class="what">A cloud-native 5G core on Kubernetes, instrumented so you can see what it’s doing.</p>
               <ul>
@@ -195,6 +195,7 @@
 
         <h3 class="also-title">Also</h3>
         <ul class="also">
+          <li><div class="also-item"><strong>Vastra</strong><span>A smart wardrobe app built with two friends: AI tagging from a photo, weather-aware outfit ideas, outfit sharing and virtual try-on. I worked on the build.</span></div></li>
           <li><a href="https://github.com/RohittPillai/COSC-4P02-PROJECT" target="_blank" rel="noopener"><strong>ResumeX</strong><span>Team résumé builder. I owned testing: 65+ Jest tests across payments and sign-up.</span></a></li>
           <li><a href="https://github.com/harashkapoor/recipica" target="_blank" rel="noopener"><strong>Recipica</strong><span>Android recipe app in Java and Retrofit with search and tag filters.</span></a></li>
         </ul>
@@ -209,44 +210,55 @@
             <span class="portrait-hint">Tap for the thermal view</span>
           </button>
           <div class="about-text">
-            <p class="about-lede">I started in QA, testing enterprise systems at Ontario’s Ministry of Transportation. The part I kept getting pulled toward was everything around the code: how it ships, how it stays up, and what tells you when it doesn’t.</p>
-            <p>So I built my own: the homelab above, run with the same habits a real team would use. I graduated in Computer Science from Brock University in 2025, and I’m studying for the CCNA and Kubernetes.</p>
+            <p class="about-lede">I’m a DevOps engineer at Concentrix in Toronto: AWS and bare-metal infrastructure, CI/CD, infrastructure as code, and being on call when something breaks at 3 a.m.</p>
+            <p>Before that I spent two and a half years at Ontario’s Ministry of Transportation doing the same kind of work for provincial systems. The homelab is where I try things on my own terms, from GPU monitoring to running language models locally. I studied Computer Science at Brock University, and I’m working toward Kubernetes (CKAD) and the CCNA.</p>
           </div>
         </div>
 
         <h3 class="sub">Experience</h3>
         <ol class="timeline">
           <li>
-            <p class="when">2025</p>
-            <h4>BSc Computer Science, Brock University</h4>
-            <p>GPA 3.7. Data structures, databases, machine learning and AI.</p>
+            <p class="when">Oct 2024 to now</p>
+            <h4>DevOps Engineer, Concentrix <span class="via">(via Wintab Tech Solutions)</span></h4>
+            <ul>
+              <li>Keep highly available AWS environments and bare-metal servers running for a micro-service architecture, on a 24/7 on-call rotation.</li>
+              <li>Automate with Python against AWS APIs, and Bash for Linux maintenance and OpenStack deployments.</li>
+              <li>Run CI/CD with Jenkins and GitHub, with Terraform and Ansible for infrastructure as code.</li>
+              <li>Set up observability with OpenTelemetry, Grafana, Splunk and PagerDuty to speed up incident response.</li>
+            </ul>
           </li>
           <li>
-            <p class="when">Jan to Sep 2024</p>
-            <h4>Junior Technical Analyst, Ontario Ministry of Transportation</h4>
-            <p>Weekly regression and functional testing on an enterprise system with 99.5% uptime. Documented enhancements and defects across three applications, and worked with the DevOps team to cut average bug resolution time by 15%.</p>
+            <p class="when">Mar 2022 to Sep 2024</p>
+            <h4>DevOps Analyst and Software Engineer, Ontario Ministry of Transportation</h4>
+            <ul>
+              <li>Orchestrated AWS micro-services and OpenStack deployments on bare metal for systems handling large provincial datasets.</li>
+              <li>Wrote Python automation and telemetry tracing, and Bash for Docker provisioning and log parsing.</li>
+              <li>Maintained CI/CD with Jenkins, Terraform and Ansible; triaged defects and validated releases against 24/7 health goals.</li>
+            </ul>
           </li>
           <li>
-            <p class="when">Aug to Dec 2022</p>
-            <h4>Co-op, Ontario Ministry of Transportation</h4>
-            <p>Regression testing for a system used by 300+ staff; logged 150+ defects in JIRA and turned the patterns into 10 workflow recommendations.</p>
+            <p class="when">2020 to 2024</p>
+            <h4>Honours BSc, Computer Science, Brock University</h4>
+            <p>Research on a 5G core testbed, data structures, databases, machine learning and AI.</p>
           </li>
         </ol>
 
         <h3 class="sub">What I work with</h3>
         <dl class="skills">
-          <div><dt>Infrastructure</dt><dd>Proxmox, Docker and Compose, Linux, Terraform, Caddy, Tailscale, restic</dd></div>
-          <div><dt>Code and automation</dt><dd>Python, Bash, Java, JavaScript, SQL, FastAPI, n8n</dd></div>
-          <div><dt>Observability</dt><dd>Grafana, Prometheus, InfluxDB, Uptime Kuma</dd></div>
-          <div><dt>Networking</dt><dd>VLANs, OSPF, VRRP, Containerlab, NAPALM</dd></div>
-          <div><dt>Testing</dt><dd>pytest, Jest, regression and API testing, Postman, JIRA</dd></div>
+          <div><dt>Cloud and infrastructure</dt><dd>AWS, OpenStack, bare-metal Linux, Proxmox, Docker and Compose</dd></div>
+          <div><dt>Automation and IaC</dt><dd>Terraform, Ansible, Python, Bash</dd></div>
+          <div><dt>CI/CD</dt><dd>Jenkins, GitHub and GitHub Actions, Forgejo, SonarQube</dd></div>
+          <div><dt>Observability</dt><dd>OpenTelemetry, Grafana, Prometheus, Splunk, PagerDuty, InfluxDB</dd></div>
+          <div><dt>Networking</dt><dd>VLANs, OSPF, VRRP, Containerlab, NAPALM, Caddy, Tailscale</dd></div>
           <div><dt>AI</dt><dd>Ollama, local LLMs, structured output with Pydantic</dd></div>
+          <div><dt>Certificates</dt><dd>DevOps Foundations (CompTIA-approved, 2026); CKAD Cert Prep course (2026)</dd></div>
+          <div><dt>Working toward</dt><dd>Certified Kubernetes Application Developer (CKAD), CCNA</dd></div>
         </dl>
       </section>
 
       <section class="contact" id="contact">
         <h2 class="reveal">Let’s talk.</h2>
-        <p class="contact-lede">I’m looking for DevOps, cloud and QA automation roles in Ontario or remote. Send a message and I’ll get back to you.</p>
+        <p class="contact-lede">Want to talk DevOps, cloud or homelabs, or about a role? Send a message and I’ll get back to you.</p>
         <form class="form" action="https://formspree.io/f/xbdabzqk" method="POST">
           <label>Your name <input name="name" autocomplete="name" required></label>
           <label>Your email <input type="email" name="email" autocomplete="email" required></label>

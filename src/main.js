@@ -177,7 +177,7 @@ if (!reduced) {
       scrollTrigger: { trigger: next, start: "top 85%", end: "top 20%", scrub: true },
     });
   });
-  gsap.from(".timeline li", { opacity: 0, x: -16, duration: 0.8, ease: "power3.out", stagger: 0.12, scrollTrigger: { trigger: ".timeline", start: "top 80%", once: true } });
+  gsap.from(".timeline > li", { opacity: 0, x: -16, duration: 0.8, ease: "power3.out", stagger: 0.12, scrollTrigger: { trigger: ".timeline", start: "top 80%", once: true } });
 }
 
 // ---------- magnetic buttons (mouse only) ----------
