@@ -284,6 +284,88 @@ main { position: relative; z-index: 2; }
 .foot { max-width: 72rem; margin: 0 auto; padding: 2.4rem 0 3rem; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.875rem; display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 24px; }
 .foot p { margin: 0; }
 
+/* ---------- cyberpunk layer: glitch, HUD frames, scan lines, viewfinder ---------- */
+:root { --cool: #5ee0ff; --cut: 16px; }
+
+/* glitch on the name: two offset copies in magenta and cyan, sliced */
+.name-line { position: relative; }
+.name-line::before, .name-line::after {
+  content: attr(data-text); position: absolute; inset: 0; pointer-events: none; opacity: 0;
+}
+.name-line::before { color: var(--heat-2); }
+.name-line::after { color: var(--cool); }
+.name.glitching .name-line::before { animation: glitch-a 0.65s steps(1) both; }
+.name.glitching .name-line::after { animation: glitch-b 0.65s steps(1) both; }
+@keyframes glitch-a {
+  0% { opacity: 0.9; clip-path: inset(8% 0 72% 0); transform: translate(-5px, 0); }
+  15% { clip-path: inset(48% 0 30% 0); transform: translate(4px, 0); }
+  30% { clip-path: inset(70% 0 6% 0); transform: translate(-3px, 0); }
+  45% { clip-path: inset(22% 0 55% 0); transform: translate(6px, 0); }
+  60% { clip-path: inset(85% 0 2% 0); transform: translate(-2px, 0); }
+  75% { clip-path: inset(38% 0 40% 0); transform: translate(3px, 0); }
+  100% { opacity: 0; transform: none; }
+}
+@keyframes glitch-b {
+  0% { opacity: 0.9; clip-path: inset(62% 0 18% 0); transform: translate(5px, 0); }
+  20% { clip-path: inset(4% 0 80% 0); transform: translate(-4px, 0); }
+  40% { clip-path: inset(40% 0 44% 0); transform: translate(3px, 0); }
+  55% { clip-path: inset(76% 0 8% 0); transform: translate(-6px, 0); }
+  80% { clip-path: inset(15% 0 66% 0); transform: translate(2px, 0); }
+  100% { opacity: 0; transform: none; }
+}
+
+/* HUD frames: cut corners and corner brackets */
+.js .beat, .card {
+  border-radius: 0;
+  clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut)));
+}
+.js .beat, .card { --b: var(--heat-3); }
+.js .beat {
+  background:
+    linear-gradient(var(--b), var(--b)) top left / 22px 2px no-repeat,
+    linear-gradient(var(--b), var(--b)) top left / 2px 22px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 22px 2px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 2px 22px no-repeat,
+    rgb(21 16 48 / 0.84);
+}
+.card {
+  background:
+    linear-gradient(var(--b), var(--b)) top left / 26px 2px no-repeat,
+    linear-gradient(var(--b), var(--b)) top left / 2px 26px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 26px 2px no-repeat,
+    linear-gradient(var(--b), var(--b)) bottom right / 2px 26px no-repeat,
+    linear-gradient(160deg, #1c1640 0%, #120e28 62%);
+}
+.card::after { border-radius: 0; }
+.btn { --cut: 10px; border-radius: 0; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, var(--cut) 100%, 0 calc(100% - var(--cut))); }
+.bar-cta { border-radius: 0; }
+
+/* scan lines over the 3D, stronger and flickering while the thermal scan runs */
+#scanlines {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.05) 0 1px, transparent 1px 3px);
+  mix-blend-mode: overlay;
+  opacity: calc(var(--thermal, 0) * 0.55 + var(--scan, 0) * 0.9);
+}
+.scanning #scanlines { animation: flicker 0.18s steps(2) infinite; }
+@keyframes flicker { 50% { filter: brightness(1.6); } }
+
+/* thermal-camera viewfinder in the screen corners */
+#viewfinder { position: fixed; inset: calc(var(--bar) + 10px) 14px 14px; z-index: 1; pointer-events: none; opacity: var(--thermal, 0); }
+#viewfinder i { position: absolute; width: 26px; height: 26px; border: 0 solid rgb(255 233 168 / 0.75); }
+#viewfinder i:nth-child(1) { left: 0; top: 0; border-left-width: 2px; border-top-width: 2px; }
+#viewfinder i:nth-child(2) { right: 0; top: 0; border-right-width: 2px; border-top-width: 2px; }
+#viewfinder i:nth-child(3) { left: 0; bottom: 0; border-left-width: 2px; border-bottom-width: 2px; }
+#viewfinder i:nth-child(4) { right: 0; bottom: 0; border-right-width: 2px; border-bottom-width: 2px; }
+#viewfinder span {
+  position: absolute; right: 36px; top: 4px; font: 600 0.75rem/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  color: var(--heat-4); letter-spacing: 0.08em; display: flex; align-items: center; gap: 8px;
+}
+#viewfinder span::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; box-shadow: 0 0 8px #ff4d4d; animation: rec 1.6s steps(1) infinite; }
+@keyframes rec { 50% { opacity: 0.2; } }
+@media (max-width: 899px) { #viewfinder { inset: calc(var(--bar) + 6px) 8px 8px; } #viewfinder i { width: 18px; height: 18px; } }
+.no-webgl #scanlines, .no-webgl #viewfinder { display: none; }
+
 /* ---------- phones and small tablets ---------- */
 @media (max-width: 899px) {
   .hero { justify-content: flex-end; padding-bottom: 32px; background: linear-gradient(transparent 22%, rgb(13 10 28 / 0.88) 52%); max-width: none; }

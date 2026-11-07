@@ -158,10 +158,16 @@ function freeArea(p) {
   return area;
 }
 
+const rootStyle = document.documentElement.style;
 function frame(now) {
   watchFps(now);
   const p = storyP();
   updateBeats(p);
+  // thermal view is on from the scan until the 3D fades; the scan itself is the hot moment
+  const scanning = stage && p > 0.05 && p < 0.55;
+  rootStyle.setProperty("--scan", scanning ? (Math.sin(((p - 0.05) / 0.5) * Math.PI)).toFixed(3) : "0");
+  rootStyle.setProperty("--thermal", stage ? (clamp01((p - 0.35) / 0.3) * (1 - clamp01((p - 3) / 0.6))).toFixed(3) : "0");
+  document.documentElement.classList.toggle("scanning", !!scanning && !reduced);
   const visible = p < 3.98;
   canvas.style.opacity = stage ? String(1 - clamp01(p - 3)) : "0";
   document.body.classList.toggle("past-lab", !visible);
@@ -183,6 +189,12 @@ document.fonts.ready.then(() => {
   $(".name").setAttribute("aria-label", "Harsh Kapoor");
   $$(".name-line").forEach((l) => l.setAttribute("aria-hidden", "true"));
   gsap.from(name.chars, { yPercent: 115, duration: 1.15, ease: "expo.out", stagger: 0.035, delay: 0.1 });
+  // a short glitch once the name has landed, and again on hover
+  const nameEl = $(".name");
+  const glitch = () => { nameEl.classList.remove("glitching"); void nameEl.offsetWidth; nameEl.classList.add("glitching"); };
+  setTimeout(glitch, 1250);
+  nameEl.addEventListener("animationend", () => nameEl.classList.remove("glitching"));
+  if (finePointer) nameEl.addEventListener("pointerenter", glitch);
   gsap.from([".status", ".lede", ".actions", ".legend"], { opacity: 0, y: 14, duration: 0.9, ease: "power3.out", stagger: 0.08, delay: 0.45 });
   $$(".reveal").forEach((h) => {
     const s = new SplitText(h, { type: "lines,words", mask: "lines" });

@@ -19,6 +19,8 @@
 <body>
   <a class="skip" href="#main">Skip to content</a>
   <canvas id="stage" aria-hidden="true"></canvas>
+  <div id="scanlines" aria-hidden="true"></div>
+  <div id="viewfinder" aria-hidden="true"><i></i><i></i><i></i><i></i><span>Thermal</span></div>
   <div id="overlay" aria-hidden="true">
     <svg id="leaders"></svg>
     <span class="callout" data-label="gpu">GPU, now running local AI models</span>
@@ -49,7 +51,7 @@
   <main id="main">
     <section class="hero" id="top">
       <p class="status"><span class="pulse" aria-hidden="true"></span>DevOps engineer in Toronto</p>
-      <h1 class="name"><span class="name-line">Harsh</span> <span class="name-line">Kapoor</span></h1>
+      <h1 class="name"><span class="name-line" data-text="Harsh">Harsh</span> <span class="name-line" data-text="Kapoor">Kapoor</span></h1>
       <p class="lede">By day I keep AWS and bare-metal infrastructure running. At home, my old gaming PC is a server with fourteen apps and a local AI, and I run it like production too.</p>
       <div class="actions">
         <a class="btn btn-hot magnetic" href="#homelab">Open up the machine</a>
