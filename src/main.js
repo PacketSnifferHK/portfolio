@@ -139,6 +139,25 @@ function watchFps(now) {
   }
 }
 
+// phones: the free band above whatever text is on screen, so the PC never hides behind it
+const statusEl = $(".status");
+let area = null;
+function freeArea(p) {
+  if (window.innerWidth >= 900) return null;
+  const vh = window.innerHeight, top = 64;
+  let bottom;
+  if (p < 0.5) bottom = Math.max(statusEl.getBoundingClientRect().top - 12, vh * 0.5);
+  else {
+    let best = null, bo = 0.25;
+    beats.forEach((b) => { const o = parseFloat(b.style.opacity || "0"); if (o > bo) { bo = o; best = b; } });
+    bottom = best ? best.getBoundingClientRect().top - 12 : area ? area.bottom : vh * 0.5;
+  }
+  const target = { top, bottom: Math.max(top + vh * 0.28, bottom) };
+  if (!area || reduced || capture) area = target;
+  else area = { top, bottom: area.bottom + (target.bottom - area.bottom) * 0.12 };
+  return area;
+}
+
 function frame(now) {
   watchFps(now);
   const p = storyP();
@@ -147,7 +166,7 @@ function frame(now) {
   canvas.style.opacity = stage ? String(1 - clamp01(p - 3)) : "0";
   document.body.classList.toggle("past-lab", !visible);
   if (stage && visible) {
-    stage.render(p, now);
+    stage.render(p, now, freeArea(p));
     placeLabels(stage.labelPositions());
   } else if (!visible) {
     for (const k in labels) labels[k].style.opacity = "0";

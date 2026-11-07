@@ -466,9 +466,11 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
   composer.addPass(bloom);
   composer.addPass(new OutputPass());
 
+  let VW = 1, VH = 1;
   function resize() {
-    const w = window.innerWidth, h = window.innerHeight;
-    renderer.setSize(w, h, false);
+    const w = (VW = window.innerWidth), h = (VH = window.innerHeight);
+    // size the canvas to the *visible* viewport (iOS Safari's bars change it), not 100lvh
+    renderer.setSize(w, h, true);
     composer.setSize(w, h);
     bloom.resolution.set(w / 2, h / 2);
     camera.aspect = w / h;
@@ -483,7 +485,8 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
   const born = performance.now();
   let last = born, k = mixKeys(0), cur = 0;
 
-  function render(p, now = performance.now()) {
+  // area: on phones, the free band of screen above the text box ({ top, bottom } in px)
+  function render(p, now = performance.now(), area = null) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     cur = p;
@@ -499,8 +502,14 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     // camera
     // phones are tall and narrow: pull back further and push the scene into the top half,
     // above the text panel (per-keyframe values in KEYS[].m)
-    const far = sm ? k.m[0] : 1;
-    const lift = sm ? k.m[1] : 0;
+    const fit = sm && area ? Math.min(1.8, Math.max(0.75, 0.5 / Math.max(0.2, (area.bottom - area.top) / VH))) : 1;
+    const far = sm ? k.m[0] * fit : 1;
+    const lift = sm && !area ? k.m[1] : 0;
+    if (sm && area) {
+      // centre the scene in the free band by shifting the projection, whatever the screen height
+      camera.setViewOffset(VW, VH, 0, VH / 2 - (area.top + area.bottom) / 2, VW, VH);
+      camera.updateProjectionMatrix();
+    }
     camera.position.set(k.target[0] + (k.cam[0] - k.target[0]) * far, k.target[1] + lift + (k.cam[1] - k.target[1]) * far, k.target[2] + (k.cam[2] - k.target[2]) * far);
     camera.lookAt(k.target[0], k.target[1] + lift, k.target[2]);
 
