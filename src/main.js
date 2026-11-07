@@ -57,7 +57,8 @@ const steps = $$(".lab-steps li");
 function updateBeats(p) {
   beats.forEach((b, i) => {
     const d = p - (i + 1);
-    const o = clamp01(1 - Math.abs(d) * 2.4 + 0.2);
+    // fully solid for a wide stretch around its keyframe, then a quick fade
+    const o = clamp01(1 - (Math.abs(d) - 0.3) * 5); // gone by |d| = 0.5, so two beats never overlap
     b.style.opacity = o.toFixed(3);
     b.style.transform = `translate3d(0, ${(-d * 46).toFixed(1)}px, 0)`;
     b.style.visibility = o < 0.01 ? "hidden" : "visible";
@@ -124,14 +125,17 @@ if ("requestIdleCallback" in window) requestIdleCallback(bootScene, { timeout: 6
 else setTimeout(bootScene, 200);
 
 // watch the frame rate for the first few seconds of 3D; slow devices get a lighter render
-let fpsStart = 0, fpsFrames = 0, fpsChecked = capture;
+// (skip the first 2 s, while shaders compile and the page settles, then measure for 3 s)
+let fpsStart = 0, fpsFrames = 0, fpsChecked = capture, firstFrame = 0;
 function watchFps(now) {
   if (fpsChecked || !stage) return;
+  if (!firstFrame) { firstFrame = now; return; }
+  if (now - firstFrame < 2000) return;
   if (!fpsStart) { fpsStart = now; return; }
   fpsFrames++;
-  if (now - fpsStart > 2500) {
+  if (now - fpsStart > 3000) {
     fpsChecked = true;
-    if ((fpsFrames * 1000) / (now - fpsStart) < 32) stage.lowerQuality();
+    if ((fpsFrames * 1000) / (now - fpsStart) < 28) stage.lowerQuality();
   }
 }
 

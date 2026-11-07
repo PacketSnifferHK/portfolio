@@ -31,11 +31,11 @@ const window01 = (p, a, b) => ease(clamp01((p - a) / (b - a)));
 // ---------- keyframes along the scroll story ----------
 // 0 hero (real render) · 1 thermal + exploded · 2 layers · 3 links out · 4 gone
 const KEYS = [
-  { cam: [7.9, 2.5, 11.2], target: [0, 0.15, 0], sway: 1, explode: 0, gpu: 0.42, layers: 0, net: 0, cool: 0 },
-  { cam: [12.4, 2.8, 4.9], target: [1.0, -0.1, -0.25], sway: 0, explode: 1, gpu: 0.98, layers: 0, net: 0, cool: 0 },
-  { cam: [9.2, 7.6, 10.2], target: [0, 3.0, 0], sway: 0, explode: 0, gpu: 0.88, layers: 1, net: 0, cool: 0.45 },
-  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.8, layers: 1, net: 1, cool: 0.45 },
-  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.6, layers: 1, net: 1, cool: 0.6 },
+  { cam: [7.9, 2.5, 11.2], target: [0, 0.15, 0], sway: 1, explode: 0, gpu: 0.42, layers: 0, net: 0, cool: 0, m: [1.72, -1.75] },
+  { cam: [12.4, 2.8, 4.9], target: [1.0, -0.1, -0.25], sway: 0, explode: 1, gpu: 0.98, layers: 0, net: 0, cool: 0, m: [2.55, -2.6] },
+  { cam: [9.2, 7.6, 10.2], target: [0, 3.0, 0], sway: 0, explode: 0, gpu: 0.88, layers: 1, net: 0, cool: 0.45, m: [2.0, -2.4] },
+  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.8, layers: 1, net: 1, cool: 0.45, m: [1.85, -2.6] },
+  { cam: [12.2, 9.4, 14.2], target: [0.6, 4.5, -0.6], sway: 0, explode: 0, gpu: 0.6, layers: 1, net: 1, cool: 0.6, m: [1.85, -2.6] },
 ];
 function mixKeys(p) {
   const i = Math.min(KEYS.length - 2, Math.max(0, Math.floor(p)));
@@ -497,9 +497,11 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     emissives.forEach((m, i) => { m.emissiveIntensity = m.userData.ei * ease(clamp01(power * 1.6 - i * 0.25)); });
 
     // camera
-    const far = sm ? 1.72 : 1;
-    camera.position.set(k.cam[0] * far, k.cam[1] * (sm ? 1.05 : 1), k.cam[2] * far);
-    const lift = sm ? lerp(-1.75, 0.4, clamp01(p)) : 0;
+    // phones are tall and narrow: pull back further and push the scene into the top half,
+    // above the text panel (per-keyframe values in KEYS[].m)
+    const far = sm ? k.m[0] : 1;
+    const lift = sm ? k.m[1] : 0;
+    camera.position.set(k.target[0] + (k.cam[0] - k.target[0]) * far, k.target[1] + lift + (k.cam[1] - k.target[1]) * far, k.target[2] + (k.cam[2] - k.target[2]) * far);
     camera.lookAt(k.target[0], k.target[1] + lift, k.target[2]);
 
     // gentle product-turntable sway in the hero
@@ -508,7 +510,7 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
     layers.rotation.y = net.rotation.y = pc.rotation.y;
 
     // thermal scan: sweeps top to bottom between the hero and the first chapter
-    const scan = window01(p, 0.08, 0.72);
+    const scan = window01(p, 0.05, 0.55);
     G.uScan.value = lerp(H / 2 + 0.25, -H / 2 - 0.35, scan);
     G.uBand.value = scan > 0 && scan < 1 ? 1 : 0;
 
@@ -606,11 +608,13 @@ export function createScene(canvas, { reducedMotion = false, small = () => windo
   // where each label sits on screen, and how visible it should be right now
   function labelPositions() {
     const out = {}, w = window.innerWidth, h = window.innerHeight;
-    const ex = k.explode;
+    // labels wait until their part has mostly arrived, so they never float over a moving scene
+    const late = (v) => clamp01((v - 0.6) / 0.4);
+    const ex = late(k.explode), ly = late(k.layers), nt = late(k.net);
     const show = {
       gpu: ex, cpu: ex, ram: ex, ssd: small() ? 0 : ex, psu: ex, fans: small() ? 0 : ex,
-      pve: k.layers * (1 - k.net), vm: k.layers, lxc: k.layers,
-      phone: k.net, b2: k.net, github: k.net,
+      pve: ly * (1 - nt), vm: ly, lxc: ly,
+      phone: nt, b2: nt, github: nt,
     };
     const fade = 1 - clamp01((cur - 3.2) / 0.5);
     for (const key in anchors) {
