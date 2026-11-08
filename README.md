@@ -2,7 +2,7 @@
 
 My portfolio. It opens on the old gaming PC that runs my homelab, modelled from scratch in three.js and lit like a product shot. As you scroll, a thermal-camera scan line sweeps down the case and turns the render into a heat image, the parts pull apart into an exploded view with technical-drawing callouts, and the virtual layers (Proxmox, the docker VM, the AI container) rise out of it.
 
-**Live:** https://harashkapoor.github.io/portfolio/
+**Live:** hosted on Cloudflare Pages
 
 ## Stack
 
@@ -10,7 +10,7 @@ My portfolio. It opens on the old gaming PC that runs my homelab, modelled from 
 - [three.js](https://threejs.org) for the scene: procedural models, a custom shader that blends the physical render into a thermal ramp along a moving scan line, bloom
 - [GSAP](https://gsap.com) (ScrollTrigger, SplitText) for text reveals and the stacking project cards, [Lenis](https://lenis.darkroom.engineering) for smooth scrolling
 - Archivo variable font (width and weight axes), self-hosted through Fontsource
-- GitHub Actions builds and deploys to GitHub Pages on every push to `main`
+- Cloudflare Pages builds and hosts it on every push to `main`; GitHub Actions checks that every push installs, passes `npm audit` and builds
 
 All versions are pinned exactly in `package.json`, and `package-lock.json` is committed, so a build in a few years produces the same site.
 
@@ -42,6 +42,13 @@ Care taken for real visitors:
 
 ## Deploying
 
-One-time: repo **Settings → Pages → Source: GitHub Actions**. After that, every push to `main` deploys.
+Hosted on Cloudflare Pages, connected to this repo. Build settings:
 
-If the site moves to a custom domain (for example `harshops.com`), add it under **Settings → Pages → Custom domain** and update the `og:image` URL in `index.html`. Asset paths are relative (`base: "./"` in `vite.config.js`), so the build works on both addresses.
+| Setting | Value |
+|---|---|
+| Framework preset | Vite (or None) |
+| Build command | `npm run build` |
+| Build output directory | `dist` |
+| Environment variable | `NODE_VERSION` = `22` |
+
+Every push to `main` deploys; other branches get preview URLs. `public/_headers` sets the security headers (CSP, no framing, HSTS, nosniff) and long caching for the hashed files in `/assets`. If the domain changes, update the `og:image` URL in `index.html`. Asset paths are relative (`base: "./"` in `vite.config.js`), so the build works on any address.
