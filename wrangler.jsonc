@@ -1,0 +1,10 @@
+// Cloudflare Workers config: the site is static, so the Worker only serves
+// the built files in dist/. public/_headers adds the security headers.
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "portfolio",
+  "compatibility_date": "2026-10-01",
+  "assets": {
+    "directory": "./dist"
+  }
+}
